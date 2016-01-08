@@ -6,12 +6,13 @@ module Lib
   ) where
 
 import Control.Lens ( (^.), (^?) )
-import Control.Monad ( unless, when )
+import Control.Monad ( liftM2, unless, when )
 import Data.Aeson ( Object, Value )
 import Data.Aeson.Lens ( key, nonNull, _Array, _String )
-import Data.ByteString.Lazy as ByteString ( ByteString, hPut, pack, take)
+import Data.ByteString.Lazy as ByteString ( ByteString, hPut, pack, take )
+import Data.Foldable ( for_ )
 import Data.List ( isPrefixOf )
-import Data.Text as Text ( unpack )
+import Data.Text ( unpack )
 import Data.Vector as Vector ( toList )
 import FileUtil ( absolutize )
 import Literal ( literalEnv )
@@ -32,21 +33,17 @@ downloadTo dest =
      savePins absDest pins
 
 getPins :: IO [Pin]
-getPins =
-  let firstUrl = endpoint ++ "/boards/nesachirou/%E3%82%82%E3%82%82%E3%82%93%E3%81%8C-momonga/pins/?access_token=" ++ accessToken ++ "&fields=id,image&limit=100"
-  in getPins_ firstUrl []
+getPins = getPins_ $ endpoint ++ "/boards/nesachirou/%E3%82%82%E3%82%82%E3%82%93%E3%81%8C-momonga/pins/?access_token=" ++ accessToken ++ "&fields=id,image&limit=100"
 
-getPins_ :: String -> [Pin] -> IO [Pin]
-getPins_ url pins =
+getPins_ :: String -> IO [Pin]
+getPins_ url =
   do r <- asJSON =<< get url :: IO (Response Value)
      print (r ^. responseHeaders)
      unless (r ^. responseStatus . statusCode == 200) $
        fail $ show (r ^. responseStatus)
-     let newPins = fmap makePin $ Vector.toList $ r ^. responseBody . key "data" . _Array
-         next    = r ^? responseBody . key "page" . key "next" . _String
-     case next of
-       Nothing      -> return (pins ++ newPins)
-       Just nextUrl -> getPins_ (unpack nextUrl) (pins ++ newPins)
+     let pins = fmap makePin $ Vector.toList $ r ^. responseBody . key "data" . _Array
+         next = r ^? responseBody . key "page" . key "next" . _String
+     liftM2 (++) (return pins) $ maybe (return []) (getPins_ . unpack) next
   where
     makePin :: Value -> Pin
     makePin item = Pin { pinId       = unpack $ item ^. key "id" . _String
@@ -54,11 +51,10 @@ getPins_ url pins =
                        }
 
 savePins :: String -> [Pin] -> IO ()
-savePins _ []                = return ()
-savePins dest (pin:restPins) =
-  do isSaved <- isPinSaved dest pin
-     unless isSaved $ savePin dest pin
-     savePins dest restPins
+savePins dest pins =
+  for_ pins $ \pin ->
+    do isSaved <- isPinSaved dest pin
+       unless isSaved $ savePin dest pin
 
 savePin :: String -> Pin -> IO ()
 savePin dest Pin { pinId = pinId, pinImageUrl = pinImageUrl } =
