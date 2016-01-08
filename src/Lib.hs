@@ -9,9 +9,9 @@ import Control.Lens ( (^.), (^?) )
 import Control.Monad ( unless, when )
 import Data.Aeson ( Object, Value )
 import Data.Aeson.Lens ( key, nonNull, _Array, _String )
-import Data.ByteString.Lazy ( ByteString, hPut )
+import Data.ByteString.Lazy as ByteString ( ByteString, hPut, pack, take)
 import Data.List ( isPrefixOf )
-import Data.Text ( unpack )
+import Data.Text as Text ( unpack )
 import Data.Vector as Vector ( toList )
 import FileUtil ( absolutize )
 import Literal ( literalEnv )
@@ -62,14 +62,27 @@ savePins dest (pin:restPins) =
 
 savePin :: String -> Pin -> IO ()
 savePin dest Pin { pinId = pinId, pinImageUrl = pinImageUrl } =
-  do r <- get pinImageUrl :: IO (Response ByteString)
+  do print Pin { pinId = pinId, pinImageUrl = pinImageUrl }
+     r <- get pinImageUrl :: IO (Response ByteString)
      print (r ^. responseHeaders)
      when (r ^. responseStatus . statusCode == 200) $
-       do file <- openFile (dest </> pinId <.> takeExtension pinImageUrl) WriteMode
+       do file <- openFile (dest </> pinId <.> extensionOf (r ^. responseBody) pinImageUrl) WriteMode
           hPut file (r ^. responseBody)
           hClose file
+  where
+    extensionOf :: ByteString -> String -> String
+    extensionOf content path
+      | isJpeg content = ".jpg"
+      | isPng content  = ".png"
+      | otherwise      = takeExtension path
 
 isPinSaved :: String -> Pin -> IO Bool
 isPinSaved dest Pin { pinId = pinId } =
   do paths <- getDirectoryContents dest
      return $ any (isPrefixOf pinId) $ fmap takeBaseName paths
+
+isJpeg :: ByteString -> Bool
+isJpeg content = ByteString.take 11 content == pack [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00]
+
+isPng :: ByteString -> Bool
+isPng content = ByteString.take 8 content == pack [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
