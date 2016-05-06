@@ -7,7 +7,7 @@ import Language.Haskell.TH.Quote
 import System.Environment ( getEnv )
 
 quoteEnv :: QuasiQuoter -> QuasiQuoter
-quoteEnv (QuasiQuoter { quoteExp = qe, quotePat = qp, quoteType = qt, quoteDec = qd }) =
+quoteEnv QuasiQuoter { quoteExp = qe, quotePat = qp, quoteType = qt, quoteDec = qd } =
   QuasiQuoter { quoteExp = get qe, quotePat = get qp, quoteType = get qt, quoteDec = get qd }
   where
     get :: (String -> Q a) -> String -> Q a
