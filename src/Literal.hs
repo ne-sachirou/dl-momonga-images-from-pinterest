@@ -16,7 +16,12 @@ quoteEnv QuasiQuoter { quoteExp = qe, quotePat = qp, quoteType = qt, quoteDec = 
       old_quoter cts
 
 literal :: QuasiQuoter
-literal = QuasiQuoter { quoteExp = return . LitE . StringL }
+literal = QuasiQuoter {
+  quoteExp = return . LitE . StringL,
+  quotePat = undefined,
+  quoteType = undefined,
+  quoteDec = undefined
+  }
 
 literalEnv :: QuasiQuoter
 literalEnv = quoteEnv literal
